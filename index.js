@@ -102,4 +102,4 @@ const wrapManaged = o => {
   return newValue
 } 
 
-exports.spyPropertyReadsRecursive = wrapManaged
+exports.spyPropertyReadsRecursive = wrapNative
