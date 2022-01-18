@@ -1,0 +1,26 @@
+{
+  "name": "spy-property-reads-recursive",
+  "version": "1.0.0",
+  "description": "Spy property reads recursively.",
+  "main": "index.js",
+  "scripts": {
+    "test": "tap"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VincentBailly/spy-property-reads-recursive.git"
+  },
+  "author": "VincentBailly",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/VincentBailly/spy-property-reads-recursive/issues"
+  },
+  "homepage": "https://github.com/VincentBailly/spy-property-reads-recursive#readme",
+  "dependencies": {
+    "array-proxy": "^1.0.0",
+    "map-proxies": "^1.0.0",
+    "set-proxy": "^1.0.2",
+    "spy-property-reads": "^1.0.3",
+    "spy-property-writes": "^1.0.2"
+  }
+}
