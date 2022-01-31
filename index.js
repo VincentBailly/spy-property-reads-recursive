@@ -61,6 +61,7 @@ const printPaths = (paths, chain = []) => {
   }
 }
 
+const memo = new Map()
 const printPathsForward = (ids = [0], chain = ['root'], visited = new Set()) => {
   ids.forEach((id,n) => {
       if (visited.has(id)) { return }
@@ -71,6 +72,11 @@ const printPathsForward = (ids = [0], chain = ['root'], visited = new Set()) => 
       if (!(value instanceof Object || value === Object.prototype) ) {
         console.log(newChain.join('.'), value)
       } else {
+        if (memo.has(id) && value instanceof Object && !(value === Object.prototype)) {
+          console.log(`these are the same objects: ${newChain.join('.')} and ${memo.get(id).join('.')}`)
+          return
+        }
+        memo.set(id, newChain)
         const targetsByQuery = graph.linksBySource.get(id);
         if (targetsByQuery) {
         [...targetsByQuery.keys()].forEach((query, n) => {
@@ -125,97 +131,94 @@ const { setHandler } = require('set-proxy')
 const { mapHandler } = require('map-proxies')
 const { arrayHandler } = require('array-proxy')
 
-let externalCode = false
-const handler0 = require('spy-property-writes').spyPropertyWrites((target, query, value, write) => {
-  //if (externalCode) { write(value); return }
-  if (value instanceof Object) {
-    if (managedMap.isWrapper(value)) {
-      const old = externalCode
-      externalCode = true
-      write(managedMap.unwrap(value))
-      externalCode = old
-      return 
-    }
-    // if the property being passed is not a managed input, then we track it as native output
-    addToGraph(target, query, value)
-    const newValue = wrapNative(value)
-    const old = externalCode
-    externalCode = true
-    write(newValue)
-    externalCode = old
-  } else {
-    const old = externalCode
-    externalCode = true
-    write(value)
-    externalCode = old
-  }
-}, setHandler(mapHandler(arrayHandler())))
-const handler02 = require('spy-property-reads').spyPropertyReads((target, query, getResult) => {
-  const old = externalCode
-  externalCode = true
-  const value = getResult()
-  externalCode = old
-  //if (externalCode) { return value }
-  if (value instanceof Object && !nativeMap.isWrapper()) { // We don't spy on native properties here
-    addToGraph(target, query, value)
-    const newValue = wrapManaged(value)
-    return newValue
-  }
-  return value
-}, handler0)
-
-let internalCode = false
 const handler1 = require('spy-property-writes').spyPropertyWrites((target, query, value, write) => {
-  //if (internalCode) { write(value); return }
   if (value instanceof Object) {
-    // if it is a wrapper to a native object then we unwrap it, it is safe to pass an unwrapped native object to
-    // another unwrapped native object
-    if (nativeMap.isWrapper(value)) {
-      const old = internalCode
-      internalCode = true
-      write(nativeMap.unwrap(value))
-      internalCode = old
-      return 
-    }
-    // if what we are getting is not a native object, then we track it as managed input
-    addToGraph(target, query, value)
-    const newValue = wrapManaged(value)
-    const old = internalCode
-    internalCode = true
+    const newValue = wrapWrites(target, value, query)
     write(newValue)
-    internalCode = old
   } else {
-    const old = internalCode
-    internalCode = true
+    if (managedMap.isWrapped(target)) {
+      addToGraph(target, query, value)
+    }
     write(value)
-    internalCode = old
   }
 }, setHandler(mapHandler(arrayHandler())))
 const handler2 = require('spy-property-reads').spyPropertyReads((target, query, getResult) => {
-  const old = internalCode
-  internalCode = true
   const value = getResult()
-  internalCode = old
-  //if (internalCode) { return value }
-  addToGraph(target, query, value)
-  if (value instanceof Object && !managedMap.isWrapper()) { // We don't spy on property that are managed
-    const newValue = wrapNative(value)
+  if (value instanceof Object) {
+    addToGraph(target, query, value)
+    const newValue = wrapReads(target, value)
     return newValue
+  }
+  if (nativeMap.isWrapped(target)) {
+    addToGraph(target, query, value)
   }
   return value
 }, handler1)
 
+const wrapReads = (parent, value) => {
+  const parentType = nativeMap.isWrapper(parent) || nativeMap.isWrapped(parent) ? 'native' : 'managed'
+  const valueType = nativeMap.isWrapper(value) || nativeMap.isWrapped(value) ? 'native' :
+                   managedMap.isWrapper(value) || managedMap.isWrapped(value) ? 'managed' : 'new'
+  if (parentType === 'native') {
+    if (valueType === 'native') {
+      return getNative(value) // We simply wrap the read object as native if it was not already wrapped
+    }
+    if (valueType === 'managed') {
+      return getManaged(value) // We simply wrap the read object as managed if it was not already wrapped
+    }
+    return wrapNative(value)
+  } else { // parent is managed
+    if (valueType === 'native') {
+      return getNative(value) // We simply wrap the read object as native if it was not already wrapped
+    }
+    if (valueType === 'managed') {
+      return getManaged(value) // We simply wrap the read object as managed if it was not already wrapped
+    }
+    return wrapManaged(value)
+  }
+}
+
+const wrapWrites = (parent, value, query) => {
+  const parentType = nativeMap.isWrapper(parent) || nativeMap.isWrapped(parent) ? 'native' : 'managed'
+  const valueType = nativeMap.isWrapper(value) || nativeMap.isWrapped(value) ? 'native' :
+                   managedMap.isWrapper(value) || managedMap.isWrapped(value) ? 'managed' : 'new'
+  if (parentType === 'native') {
+    if (valueType === 'native') {
+      return nativeMap.unwrap(value) // native gets access to other native objects
+    }
+    if (valueType === 'managed') {
+      addToGraph(parent, query, value)
+      return getManaged(value) // We simply wrap the read object as managed if it was not already wrapped
+    }
+    addToGraph(parent, query, value)
+    return wrapManaged(value)
+  } else { // parent is managed
+    if (valueType === 'native') {
+      addToGraph(parent, query, value)
+      return getNative(value) // We simply wrap the read object as native if it was not already wrapped
+    }
+    if (valueType === 'managed') {
+      return managedMap.unwrap(value) // Managed objects can freely get other managed objects
+    }
+    addToGraph(parent, query, value)
+    return wrapNative(value)
+  }
+}
+
+const getManaged = (o) => {
+  return managedMap.isWrapper(o) ? o : managedMap.getWrapper(o)
+}
+const getNative = (o) => {
+  return nativeMap.isWrapper(o) ? o : nativeMap.getWrapper(o)
+}
+
 const wrapNative = o => {
-  if (nativeMap.isWrapper(o)) { return o }
-  if (nativeMap.isWrapped(o)) { return nativeMap.getWrapper(o) }
   const newValue = new Proxy(o, handler2)
   nativeMap.setWrapped(o, newValue)
   return newValue
 } 
 const wrapManaged = o => {
-  if (managedMap.isWrapper(o)) { return o }
-  if (managedMap.isWrapped(o)) { return managedMap.getWrapper(o) }
-  const newValue = new Proxy(o, handler02)
+  const newValue = new Proxy(o, handler2)
   managedMap.setWrapped(o, newValue)
   return newValue
 } 
