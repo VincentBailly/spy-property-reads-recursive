@@ -38,7 +38,8 @@ const graph = {
   nodeIds: new Map(),
   nodesById: new Map(),
   linksBySource: new Map(),
-  linksByTarget: new Map()
+  linksByTarget: new Map(),
+  path: new Map()
 }
 
 const getPaths = (o, visited = []) => {
@@ -60,6 +61,27 @@ const printPaths = (paths, chain = []) => {
     })
   }
 }
+
+// TODO: finish this
+const assignShortestPath = (ids = [0], chain = ['root[']) => {
+  ids.forEach((id, n) =>  {
+      if (graph.path.has(id)) {
+        return
+      }
+      const newChain = [...chain]
+      newChain[newChain.length-1] = newChain[newChain.length-1]+`#${n+1}`
+      graph.set(id, newChain)
+        const targetsByQuery = graph.linksBySource.get(id);
+        if (targetsByQuery) {
+        [...targetsByQuery.keys()].forEach((query, n) => {
+            const targets = targetsByQuery.get(query)
+            assignShortestPath(targets, [...newChain, query])
+            })
+        }
+      })
+}
+
+
 
 const memo = new Map()
 const printPathsForward = (ids = [0], chain = ['root'], visited = new Set()) => {
