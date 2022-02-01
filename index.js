@@ -143,6 +143,12 @@ const handler1 = require('spy-property-writes').spyPropertyWrites((target, query
   }
 }, setHandler(mapHandler(arrayHandler())))
 const handler2 = require('spy-property-reads').spyPropertyReads((target, query, getResult) => {
+    if (query === 'get("__target")') {
+      return target
+    }
+    if (query === 'get("isProxy")') {
+    return true
+    }
   const value = getResult()
   if (value instanceof Object) {
     addToGraph(target, query, value)
@@ -205,6 +211,7 @@ const wrapWrites = (parent, value, query) => {
   }
 }
 
+
 const getManaged = (o) => {
   return managedMap.isWrapper(o) ? o : managedMap.getWrapper(o)
 }
@@ -213,11 +220,13 @@ const getNative = (o) => {
 }
 
 const wrapNative = o => {
+  //o['__type'] = 'native'
   const newValue = new Proxy(o, handler2)
   nativeMap.setWrapped(o, newValue)
   return newValue
 } 
 const wrapManaged = o => {
+  //o['__type'] = 'managed'
   const newValue = new Proxy(o, handler2)
   managedMap.setWrapped(o, newValue)
   return newValue
